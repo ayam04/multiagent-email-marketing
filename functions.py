@@ -35,7 +35,7 @@ def bot_reply(category):
                 {"role": "system", "content": "You are a Professional Email Writer, that specializes in writing email based on the user response category. You always return a single line JSON with the subject and body of the email."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0
+            temperature=1
         )
 
     content = response.choices[0].message.content.strip()

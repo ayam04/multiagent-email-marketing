@@ -16,16 +16,31 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 openai_client = openai.Client()
 
 SMTP_PORT = 587
+CHECK_INTERVAL = 10
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
 
 HTML_TEMPLATE = """
 <html>
-<body>
-  <h1>Hire Faster with Us</h1>
-  <p>Discover how our solution can help you streamline your hiring process. 
-  Check out more details at <a href='https://example.com'>this link</a>.</p>
-  <p>If you no longer wish to receive emails, <a href="https://example.com/unsubscribe">unsubscribe here</a>.</p>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+  <div style="max-width: 600px; background-color: #ffffff; margin: 0 auto; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+    <h1 style="color: #4A90E2; text-align: center;">Hire Faster with Us</h1>
+    <p style="font-size: 16px; color: #333333; line-height: 1.6;">
+      Ready to streamline your hiring process? Our cutting-edge solution helps you find the right candidates faster and more efficiently. 
+    </p>
+    <p style="text-align: center;">
+      <a href="https://example.com" style="display: inline-block; padding: 12px 24px; background-color: #4A90E2; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold;">
+        Learn More
+      </a>
+    </p>
+    <hr style="border: none; border-top: 1px solid #eeeeee; margin: 20px 0;">
+    <p style="font-size: 14px; color: #666666; text-align: center;">
+      If you no longer wish to receive these emails, 
+      <a href="https://example.com/unsubscribe" style="color: #4A90E2; text-decoration: underline;">
+        unsubscribe here
+      </a>.
+    </p>
+  </div>
 </body>
 </html>
 """
@@ -33,10 +48,14 @@ HTML_TEMPLATE = """
 TEXT_TEMPLATE = """
 Hire Faster with Us!
 
-Discover how our solution can help you streamline your hiring process.
-Check out more details at https://example.com.
+Looking to streamline your hiring process? Our cutting-edge solution helps you find the right candidates faster and more efficiently.
 
-If you no longer wish to receive emails, unsubscribe here: https://example.com/unsubscribe
+Learn more at https://example.com.
+
+---
+
+If you no longer wish to receive these emails, unsubscribe here: https://example.com/unsubscribe
+
 """
 
 def get_smtp_server(email_domain):
@@ -82,26 +101,29 @@ def reply_agent():
     email_domain = EMAIL_USER.split('@')[1]
     imap_server = get_imap_server(email_domain)
     
-    mail = imaplib.IMAP4_SSL(imap_server)
-    mail.login(EMAIL_USER, EMAIL_PASS)
-    mail.select('inbox')
+    try:
+        mail = imaplib.IMAP4_SSL(imap_server)
+        mail.login(EMAIL_USER, EMAIL_PASS)
+        mail.select('inbox')
 
-    _, data = mail.search(None, '(UNSEEN)')
-    email_ids = data[0].split()
+        _, data = mail.search(None, '(UNSEEN)')
+        email_ids = data[0].split()
 
-    for e_id in email_ids:
-        _, email_data = mail.fetch(e_id, '(RFC822)')
-        raw_email = email_data[0][1].decode('utf-8')
-        msg = email.message_from_string(raw_email)
-        sender = msg['from']
-        body = get_body(msg)
-        
-        response_category = classify_response(body)
-        print(f"Received email from {sender} classified as {response_category}")
-        save_to_csv(sender, body, response_category)
-        send_reply(sender, response_category)
+        for e_id in email_ids:
+            _, email_data = mail.fetch(e_id, '(RFC822)')
+            raw_email = email_data[0][1].decode('utf-8')
+            msg = email.message_from_string(raw_email)
+            sender = msg['from']
+            body = get_body(msg)
+            
+            response_category = classify_response(body)
+            print(f"Received email from {sender} classified as {response_category}")
+            save_to_csv(sender, body, response_category)
+            send_reply(sender, response_category)
 
-    mail.logout()
+        mail.logout()
+    except Exception as e:
+        print(f"Error in reply_agent: {str(e)}")
 
 def get_body(msg):
     if msg.is_multipart():
@@ -142,9 +164,17 @@ def send_reply(recipient_email, category):
     except Exception as e:
         print(f"Error in send_reply: {str(e)}")
 
-if __name__ == "__main__":
-    clients = ['divyansh.academic@gmail.com']
-    for client in clients:
-        send_email_agent(client)
-        time.sleep(10)
-    reply_agent()
+def continuous_monitoring():
+    print("Starting continuous email monitoring...")
+    while True:
+        try:
+            reply_agent()
+            print(f"Checked for new emails. Waiting for {CHECK_INTERVAL} seconds before next check.")
+            time.sleep(CHECK_INTERVAL)
+        except KeyboardInterrupt:
+            print("Monitoring stopped by user.")
+            break
+        except Exception as e:
+            print(f"An error occurred: {str(e)}")
+            print(f"Restarting monitoring in {CHECK_INTERVAL} seconds...")
+            time.sleep(CHECK_INTERVAL)

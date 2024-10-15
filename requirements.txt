@@ -1,0 +1,5 @@
+csv
+smtplib
+imaplib
+openai==1.35.14
+python-dotenv

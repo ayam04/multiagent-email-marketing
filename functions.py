@@ -1,7 +1,6 @@
 import openai
 from dotenv import load_dotenv
 import os
-from json import JSONDecodeError
 import json
 
 load_dotenv()
@@ -41,7 +40,7 @@ def bot_reply(category):
     content = response.choices[0].message.content.strip()
     try:
         data = json.loads(content)
-    except JSONDecodeError:
+    except json.JSONDecodeError:
         print(f"Failed to parse JSON: {content}")
         data = {
                 "subject": f"Response to your {category} email",

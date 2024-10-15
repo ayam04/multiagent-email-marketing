@@ -7,6 +7,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 from dotenv import load_dotenv
+from functions import classify_response, bot_reply
+import time
 
 load_dotenv()
 
@@ -20,10 +22,21 @@ EMAIL_PASS = os.getenv("EMAIL_PASS")
 HTML_TEMPLATE = """
 <html>
 <body>
-  <h1>Hire Faster with us</h1>
-  <p>Check out our amazing product at <a href='https://example.com'>this link</a>!</p>
+  <h1>Hire Faster with Us</h1>
+  <p>Discover how our solution can help you streamline your hiring process. 
+  Check out more details at <a href='https://example.com'>this link</a>.</p>
+  <p>If you no longer wish to receive emails, <a href="https://example.com/unsubscribe">unsubscribe here</a>.</p>
 </body>
 </html>
+"""
+
+TEXT_TEMPLATE = """
+Hire Faster with Us!
+
+Discover how our solution can help you streamline your hiring process.
+Check out more details at https://example.com.
+
+If you no longer wish to receive emails, unsubscribe here: https://example.com/unsubscribe
 """
 
 def get_smtp_server(email_domain):
@@ -42,15 +55,17 @@ def get_imap_server(email_domain):
     }
     return domain_to_imap.get(email_domain, 'imap.example.com')
 
-def send_email(recipient_email):
+def send_email_agent(recipient_email):
     email_domain = recipient_email.split('@')[1]
     smtp_server = get_smtp_server(email_domain)
     
-    msg = MIMEMultipart()
+    msg = MIMEMultipart('alternative')
     msg['From'] = EMAIL_USER
     msg['To'] = recipient_email
-    msg['Subject'] = "Test Email"
+    msg['Subject'] = "Discover how to hire faster!"
+    msg['Reply-To'] = EMAIL_USER
 
+    msg.attach(MIMEText(TEXT_TEMPLATE, 'plain'))
     msg.attach(MIMEText(HTML_TEMPLATE, 'html'))
 
     try:
@@ -63,7 +78,7 @@ def send_email(recipient_email):
     except Exception as e:
         print(f"Error sending email to {recipient_email}: {str(e)}")
 
-def check_inbox():
+def reply_agent():
     email_domain = EMAIL_USER.split('@')[1]
     imap_server = get_imap_server(email_domain)
     
@@ -96,23 +111,6 @@ def get_body(msg):
     else:
         return msg.get_payload(decode=True).decode('utf-8')
 
-def classify_response(text):
-    prompt = f"Classify the following email response into one of the following categories: positive, unsubscribe, inquiry, other. '{text}'"
-    try:
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a Professional Email Categoriser, that specializes in categorizing email responses into positive, unsubscribe, inquiry, other."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0
-        )
-        category = response.choices[0].message.content.strip().lower()
-        return category
-    except Exception as e:
-        print(f"Error classifying response: {str(e)}")
-        return "other"
-
 def save_to_csv(sender, body, category):
     file_exists = os.path.isfile('responses.csv')
     with open('responses.csv', 'a', newline='') as csvfile:
@@ -124,40 +122,29 @@ def save_to_csv(sender, body, category):
     print(f"Saved response from {sender} to CSV.")
 
 def send_reply(recipient_email, category):
-    if category == "positive":
-        subject = "Thank you for your interest!"
-        body = "We are glad you are interested in our product. Feel free to reach out for more details."
-    elif category == "unsubscribe":
-        subject = "Unsubscribed from our mailing list"
-        body = "We have removed you from our mailing list. Thank you!"
-    elif category == "inquiry":
-        subject = "More Information About Our Product"
-        body = "We appreciate your interest. Here's more information on the product you asked about."
-    else:
-        subject = "Thank you for your feedback"
-        body = "We have received your message. Thank you for your feedback."
-
-    email_domain = EMAIL_USER.split('@')[1]  # Use sender's email domain
-    smtp_server = get_smtp_server(email_domain)
-    
-    msg = MIMEMultipart()
-    msg['From'] = EMAIL_USER
-    msg['To'] = recipient_email
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain'))
-
     try:
-        server = smtplib.SMTP(smtp_server, SMTP_PORT)
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.sendmail(EMAIL_USER, recipient_email, msg.as_string())
-        server.quit()
+        data = bot_reply(category)
+        email_domain = EMAIL_USER.split('@')[1]
+        smtp_server = get_smtp_server(email_domain)
+        
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_USER
+        msg['To'] = recipient_email
+        msg['Subject'] = data['subject']
+        msg.attach(MIMEText(data['body'], 'plain'))
+
+        with smtplib.SMTP(smtp_server, SMTP_PORT) as server:
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.sendmail(EMAIL_USER, recipient_email, msg.as_string())
+        
         print(f"Reply sent to {recipient_email} for {category} response")
     except Exception as e:
-        print(f"Error sending reply: {str(e)}")
+        print(f"Error in send_reply: {str(e)}")
 
 if __name__ == "__main__":
-    # clients = ['ishkirat04@gmail.com']
-    # for client in clients:
-    #     send_email(client)
-    check_inbox()
+    clients = ['divyansh.academic@gmail.com']
+    for client in clients:
+        send_email_agent(client)
+        time.sleep(10)
+    # reply_agent()
